@@ -1,65 +1,55 @@
+# ml_file_organizer.py
+from watchdog.observers import Observer
+from watchdog.events import FileSystemEventHandler
 import os
 import shutil
-import numpy as np
-from sklearn.preprocessing import LabelEncoder
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.models import Sequential
-from tensorflow.keras.layers import Dense
+import joblib
 
-# Sample dataset (file names and categories)
-data = [
-    ("photo.jpg", "Pictures"),
-    ("music.mp3", "Entertainment"),
-]
+# Load the trained model
+model = joblib.load("file_classifier_model.pkl")
 
-# Extract features (file name length + extension encoding)
-def extract_features(file_name):
-    name_length = len(file_name)
-    extension = file_name.split(".")[-1]
-    extension_mapping = {"exe": 0, "mp4": 1, "jpg": 2, "png": 3, "mp3": 4}
-    return [name_length, extension_mapping.get(extension, -1)]
+# Base folder categories
+CATEGORIES = ["Documents", "Pictures", "Entertainment", "Music", "Archives", "Other"]
 
-# Prepare data for training
-file_names, labels = zip(*data)
-label_encoder = LabelEncoder()
-encoded_labels = label_encoder.fit_transform(labels)
-features = np.array([extract_features(f) for f in file_names])
-X_train, X_test, y_train, y_test = train_test_split(features, encoded_labels, test_size=0.2, random_state=42)
-
-# Build AI Model
-model = Sequential([
-    Dense(16, activation='relu', input_shape=(2,)),
-    Dense(8, activation='relu'),
-    Dense(len(set(encoded_labels)), activation='softmax')
-])
-
-model.compile(optimizer='adam', loss='sparse_categorical_crossentropy', metrics=['accuracy'])
-model.fit(X_train, y_train, epochs=10, batch_size=2, verbose=1)
-
-# Function to predict category
+# Predict category using ML model
 def predict_category(file_name):
-    feature = np.array([extract_features(file_name)])
-    prediction = model.predict(feature, verbose=0)
-    return label_encoder.inverse_transform([np.argmax(prediction)])[0]
+    return model.predict([file_name])[0]
 
-# Organize files into folders
-def organize_files(file_list, base_directory):
-    for file in file_list:
-        def organize_files(file_list, base_directory):
-         category = predict_category(file)
-        category_path = os.path.join(base_directory, category)
-        os.makedirs(category_path, exist_ok=True)
-        file_path = os.path.join(base_directory, file)
-        new_path = os.path.join(category_path, file)
-        if os.path.exists(file_path):
-            shutil.move(file_path, new_path)
-            print(f"Moved {file} to {category}/")
-            print("Detected files:", file_list)
-        else:
-            print(f"File {file} not found in the base directory.")
+# Event handler
+class FileOrganizerHandler(FileSystemEventHandler):
+    def on_created(self, event):
+        if not event.is_directory:
+            file_path = event.src_path
+            file_name = os.path.basename(file_path)
+            
+            # Predict category using ML
+            predicted_folder = predict_category(file_name)
+            
+            # Fallback if not in defined categories
+            if predicted_folder not in CATEGORIES:
+                predicted_folder = "Other"
+                
+            # Move file
+            destination_path = os.path.join(os.path.dirname(file_path), predicted_folder)
+            if not os.path.exists(destination_path):
+                os.makedirs(destination_path)
+                
+            shutil.move(file_path, os.path.join(destination_path, file_name))
+            print(f"Moved {file_name} to {predicted_folder}")
 
-# Run the script
+# Main
 if __name__ == "__main__":
-    new_files = ["Entertainment", "Pictures"]
-    base_directory = "./files"
-    organize_files(new_files, base_directory)
+    directory_to_monitor = os.path.expanduser("Test_folderr")
+    
+    event_handler = FileOrganizerHandler()
+    observer = Observer()
+    observer.schedule(event_handler, path=directory_to_monitor, recursive=False)
+    observer.start()
+    
+    try:
+        print(f"Monitoring {directory_to_monitor} for new files...")
+        while True:
+            pass
+    except KeyboardInterrupt:
+        observer.stop()
+    observer.join()
