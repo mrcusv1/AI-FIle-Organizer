@@ -3,7 +3,7 @@ AI File Organizer
 
 Link to the research paper: https://docs.google.com/document/d/1zWwrqLUhDA3_IMMzyrJRG43sns2idvM6lOZC6XeBtao/edit?usp=sharing
 
-A smart background automation tool that uses a Machine Learning classifier to instantly
+A smart background automation tool that uses a AI classifier to instantly
 sort newly added files into dedicated category folders based on their file names.
 
 ---
